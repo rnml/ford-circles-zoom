@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a12; overflow: hidden; width: 100vw; height: 100vh; }
+canvas { display: block; }
+#info {
+  position: absolute; top: 12px; left: 12px;
+  color: rgba(255,255,255,0.45); font-family: monospace; font-size: 11px;
+  pointer-events: none; line-height: 1.8;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">
+  <div>Target: √2 ≈ 1.41421356…</div>
+  <div id="view-info"></div>
+  <div id="zoom-info"></div>
+</div>
+<script>
+const SQRT2 = Math.sqrt(2);
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const viewInfo = document.getElementById('view-info');
+const zoomInfo = document.getElementById('zoom-info');
+
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Zoom range: viewHW goes from HW_MAX (zoomed out) to HW_MIN (zoomed in)
+const HW_MAX = 1.5;
+// 4-digit denominators (q~1000): radius = 1/(2e6). We want that visible at ~4px.
+// sr = r * W / (2*viewHW) >= 4  =>  viewHW <= r*W/8 = W/(2*2e6*8)
+// At W=1400: viewHW ~ 1400/32e6 ~ 4.4e-5. Use ~5e-5.
+const HW_MIN = 5e-5;
+
+// Cycle param t in [0,1]: 0=zoomed out, 1=zoomed in, cycles back
+// Use a smooth sinusoidal oscillation
+let phase = 0; // 0..2PI, viewHW = remap(sin)
+const PERIOD = 28000; // ms for full cycle
+
+function easeHW(ph) {
+  // sin goes -1..1; remap to HW_MAX..HW_MIN in log space
+  const s = (Math.sin(ph) + 1) / 2; // 0..1
+  // smooth it further with a cubic ease
+  const e = s * s * (3 - 2 * s);
+  const logMin = Math.log(HW_MIN), logMax = Math.log(HW_MAX);
+  return Math.exp(logMax + e * (logMin - logMax));
+}
+
+function gcd(a, b) { while (b) { let t = b; b = a % b; a = t; } return a; }
+
+function getFordCircles(xLeft, xRight, viewHW) {
+  const scale = W / (2 * viewHW);
+  const minPx = 0.5;
+  // max q such that radius in screen px >= minPx
+  // r = 1/(2q^2), sr = r * scale >= minPx => q <= sqrt(scale / (2*minPx))
+  const maxQ = Math.min(1200, Math.ceil(Math.sqrt(scale / (2 * minPx))));
+
+  const circles = [];
+
+  // Integer circles (q=1, r=0.5)
+  for (let p = Math.floor(xLeft) - 1; p <= Math.ceil(xRight) + 1; p++) {
+    circles.push({p, q: 1, x: p, r: 0.5});
+  }
+
+  for (let q = 2; q <= maxQ; q++) {
+    const r = 1 / (2 * q * q);
+    const sr = r * scale;
+    if (sr < minPx) break; // q only grows, so we can break
+    const plo = Math.floor(xLeft * q) - 1;
+    const phi = Math.ceil(xRight * q) + 1;
+    for (let p = plo; p <= phi; p++) {
+      if (gcd(Math.abs(p), q) !== 1) continue;
+      const cx = p / q;
+      if (cx - r > xRight || cx + r < xLeft) continue;
+      circles.push({p, q, x: cx, r});
+    }
+  }
+  return circles;
+}
+
+function circleColor(q, alpha) {
+  const hue = q === 1 ? 48 : (180 + Math.log2(q) * 47) % 360;
+  const sat = q === 1 ? 80 : 70;
+  const light = q === 1 ? 62 : 55;
+  return `hsla(${hue},${sat}%,${light}%,${alpha})`;
+}
+
+function draw(viewHW) {
+  ctx.clearRect(0, 0, W, H);
+
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0a0a12');
+  bg.addColorStop(1, '#12101e');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const scale = W / (2 * viewHW);
+  const lineY = H * 0.88;
+
+  const xLeft  = SQRT2 - viewHW;
+  const xRight = SQRT2 + viewHW;
+
+  const circles = getFordCircles(xLeft, xRight, viewHW);
+  // Draw largest q first (smallest circles) so small ones are under big ones
+  circles.sort((a, b) => b.q - a.q);
+
+  for (const {p, q, x, r} of circles) {
+    const sx = (x - SQRT2) / (2 * viewHW) * W + W / 2;
+    const sr = r * scale;
+    if (sr < 0.4) continue;
+    const sy = lineY - sr;
+    const alpha = Math.min(1, (sr - 0.4) / 3 + 0.15);
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx.fillStyle = circleColor(q, alpha * 0.18);
+    ctx.fill();
+    ctx.strokeStyle = circleColor(q, alpha * 0.85);
+    ctx.lineWidth = Math.min(1.5, sr * 0.04 + 0.4);
+    ctx.stroke();
+
+    if (sr > 22) {
+      const fs = Math.min(sr * 0.32, 15);
+      ctx.font = `${fs}px monospace`;
+      ctx.fillStyle = circleColor(q, 0.92);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(q === 1 ? `${p}` : `${p}/${q}`, sx, sy);
+    }
+  }
+
+  // Base line
+  ctx.beginPath();
+  ctx.moveTo(0, lineY);
+  ctx.lineTo(W, lineY);
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+
+
+  // HUD
+  const zoom = HW_MAX / viewHW;
+  viewInfo.textContent = `view width: ±${viewHW.toExponential(2)}`;
+  zoomInfo.textContent  = `zoom: ${zoom.toExponential(2)}×`;
+}
+
+let lastT = null;
+
+function animate(t) {
+  if (lastT === null) lastT = t;
+  const dt = Math.min(t - lastT, 50);
+  lastT = t;
+
+  phase += (2 * Math.PI / PERIOD) * dt;
+
+  const viewHW = easeHW(phase);
+  draw(viewHW);
+  requestAnimationFrame(animate);
+}
+
+draw(HW_MAX);
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
