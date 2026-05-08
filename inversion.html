@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Circle Inversion — Interactive Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --paper: #fdfbf6;
+    --ink: #1c1a17;
+    --muted: #6b6358;
+    --line: #d8d1c2;
+    --red: #b53326;
+    --blue: #2c5aa8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Spectral', Georgia, serif;
+    padding: 28px 32px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-image:
+      radial-gradient(circle at 20% 0%, rgba(181, 51, 38, 0.04), transparent 50%),
+      radial-gradient(circle at 80% 100%, rgba(44, 90, 168, 0.04), transparent 50%);
+  }
+
+  header {
+    width: 100%;
+    max-width: 1240px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+  }
+  .title-block h1 {
+    font-family: 'Spectral', serif;
+    font-weight: 300;
+    font-size: 30px;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .title-block h1 em {
+    font-style: italic;
+    color: var(--red);
+    font-weight: 400;
+  }
+  .title-block .sub {
+    margin-top: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+  .meta span { color: var(--ink); }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+  .controls .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 6px;
+  }
+  .toggle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    background: transparent;
+    border: 1px solid var(--ink);
+    padding: 9px 18px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.15s, color 0.15s;
+    color: var(--ink);
+    border-radius: 0;
+  }
+  .toggle:hover { background: var(--ink); color: var(--paper); }
+  .toggle.active { background: var(--ink); color: var(--paper); }
+  .toggle.off { opacity: 0.45; }
+
+  #applet-wrap {
+    width: 100%;
+    max-width: 1240px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 12px 40px -20px rgba(28,26,23,0.18);
+    padding: 8px;
+  }
+  #applet { width: 100%; }
+
+  footer {
+    width: 100%;
+    max-width: 1240px;
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .legend { display: flex; gap: 22px; }
+  .legend span { display: flex; align-items: center; gap: 8px; }
+  .swatch {
+    width: 10px; height: 10px; border-radius: 50%;
+    display: inline-block;
+  }
+  .hint { font-style: italic; opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-block">
+    <h1>Circle Inversion <em>·</em> an interactive figure</h1>
+    <div class="sub">Drag any red point — observe its image in blue</div>
+  </div>
+  <div class="meta">
+    Built with <span>GeoGebra</span><br>
+    Reflect( <span>object</span> , <span>circle</span> )
+  </div>
+</header>
+
+<div class="controls">
+  <span class="label">Show:</span>
+  <button class="toggle active" data-target="point">Point</button>
+  <button class="toggle active" data-target="line">Line</button>
+  <button class="toggle active" data-target="circle">Circle</button>
+</div>
+
+<div id="applet-wrap">
+  <div id="applet"></div>
+</div>
+
+<footer>
+  <div class="legend">
+    <span><span class="swatch" style="background:#1c1a17"></span>Circle of inversion</span>
+    <span><span class="swatch" style="background:var(--red)"></span>Original</span>
+    <span><span class="swatch" style="background:var(--blue)"></span>Image under inversion</span>
+  </div>
+  <div class="hint">Tip: drag the red dot on the inversion circle to change its radius</div>
+</footer>
+
+<script>
+  let ggb = null;
+  const groups = {
+    point:  ['A', 'Ap'],
+    line:   ['B', 'C', 'f', 'fp'],
+    circle: ['D', 'E', 'g', 'gp']
+  };
+  const state = { point: true, line: true, circle: true };
+
+  function appletDims() {
+    const w = Math.min(1224, window.innerWidth - 80);
+    const h = Math.max(420, Math.min(720, window.innerHeight - 280));
+    return { w, h };
+  }
+  const { w: APPLET_W, h: APPLET_H } = appletDims();
+
+  const params = {
+    appName: 'geometry',
+    width: APPLET_W,
+    height: APPLET_H,
+    showToolBar: false,
+    showAlgebraInput: false,
+    showMenuBar: false,
+    showResetIcon: true,
+    enableShiftDragZoom: true,
+    showFullscreenButton: true,
+    capturingThreshold: 6,
+    appletOnLoad: function(api) {
+      ggb = api;
+      const aspect = APPLET_W / APPLET_H;
+      const yHalf = 5.5;
+      const xHalf = yHalf * aspect;
+      api.setCoordSystem(-xHalf, xHalf, -yHalf, yHalf);
+      api.setAxesVisible(1, true, true);
+      api.setGridVisible(true);
+
+      api.evalCommand('O = (0, 0)');
+      api.evalCommand('R = (3, 0)');
+      api.evalCommand('c = Circle(O, R)');
+      api.setColor('c', 28, 26, 23);
+      api.setLineThickness('c', 5);
+      api.setColor('O', 28, 26, 23);
+      api.setColor('R', 28, 26, 23);
+      api.setPointSize('O', 5);
+      api.setPointSize('R', 5);
+      api.setCaption('O', 'O');
+      api.setCaption('R', 'r');
+      api.setLabelStyle('O', 3);
+      api.setLabelStyle('R', 3);
+      api.setLabelVisible('c', false);
+
+      api.evalCommand('A = (4.5, 2.5)');
+      api.evalCommand("Ap = Reflect(A, c)");
+      api.setColor('A', 181, 51, 38);
+      api.setColor('Ap', 44, 90, 168);
+      api.setPointSize('A', 6);
+      api.setPointSize('Ap', 6);
+      api.setCaption('Ap', "A'");
+      api.setLabelStyle('Ap', 3);
+
+      api.evalCommand('B = (-4, 3.5)');
+      api.evalCommand('C = (4, 3.5)');
+      api.evalCommand('f = Line(B, C)');
+      api.evalCommand('fp = Reflect(f, c)');
+      api.setColor('B', 181, 51, 38);
+      api.setColor('C', 181, 51, 38);
+      api.setColor('f', 181, 51, 38);
+      api.setColor('fp', 44, 90, 168);
+      api.setPointSize('B', 5);
+      api.setPointSize('C', 5);
+      api.setLineThickness('f', 3);
+      api.setLineThickness('fp', 3);
+      api.setLabelVisible('f', false);
+      api.setLabelVisible('fp', false);
+
+      api.evalCommand('D = (-4.5, -2.2)');
+      api.evalCommand('E = (-2.8, -2.2)');
+      api.evalCommand('g = Circle(D, E)');
+      api.evalCommand('gp = Reflect(g, c)');
+      api.setColor('D', 181, 51, 38);
+      api.setColor('E', 181, 51, 38);
+      api.setColor('g', 181, 51, 38);
+      api.setColor('gp', 44, 90, 168);
+      api.setPointSize('D', 5);
+      api.setPointSize('E', 5);
+      api.setLineThickness('g', 3);
+      api.setLineThickness('gp', 3);
+      api.setLabelVisible('g', false);
+      api.setLabelVisible('gp', false);
+    }
+  };
+
+  // Robust script loader — tries multiple GeoGebra CDNs
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Failed: ' + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  function showError(msg) {
+    const wrap = document.getElementById('applet');
+    wrap.innerHTML =
+      '<div style="padding:60px 40px;font-family:\'IBM Plex Mono\',monospace;' +
+      'font-size:13px;line-height:1.7;color:#6b6358;text-align:center;">' +
+      '<div style="font-size:22px;color:#b53326;margin-bottom:18px;">⚠ Could not load GeoGebra</div>' +
+      msg +
+      '<br><br>This page needs an internet connection to load the GeoGebra library ' +
+      '(<code>deployggb.js</code>) from geogebra.org.<br>' +
+      'If you are online, your browser may be blocking third-party scripts — ' +
+      'try opening the file directly in Chrome/Firefox/Safari.' +
+      '</div>';
+  }
+
+  async function init() {
+    const urls = [
+      'https://www.geogebra.org/apps/deployggb.js',
+      'https://cdn.geogebra.org/apps/deployggb.js'
+    ];
+    let loaded = false;
+    for (const url of urls) {
+      try { await loadScript(url); loaded = true; break; }
+      catch (e) { console.warn(e); }
+    }
+    if (!loaded || typeof GGBApplet === 'undefined') {
+      showError('Both <code>www.geogebra.org</code> and <code>cdn.geogebra.org</code> failed to respond.');
+      return;
+    }
+    try {
+      const applet = new GGBApplet(params, true);
+      applet.inject('applet');
+    } catch (e) {
+      showError('GeoGebra loaded but failed to start: ' + e.message);
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    init();
+  } else {
+    window.addEventListener('DOMContentLoaded', init);
+  }
+
+  document.querySelectorAll('.toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.target;
+      state[target] = !state[target];
+      btn.classList.toggle('active', state[target]);
+      btn.classList.toggle('off', !state[target]);
+      if (!ggb) return;
+      groups[target].forEach(name => ggb.setVisible(name, state[target]));
+    });
+  });
+</script>
+</body>
+</html>
